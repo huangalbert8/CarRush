@@ -1,7 +1,6 @@
 import pygame
 import random
 import os
-import time
 import neat
 
 pygame.font.init()  # init font
@@ -27,6 +26,9 @@ pause = False
 
 
 class Car:
+    """
+    Object for the user to control
+    """
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -35,41 +37,47 @@ class Car:
         self.collided = False
 
     def slide_left(self):
-        k = 0
-        if self.x > 203:
-            while(k < 75):
-                self.x = self.x - 5
-                k = k+5
-        # else:
-        #     self.collided = True
+        """
+        slides the car left if not in leftmost lane
+        :return: 
+        """
+        if self.x > 201:
+            self.x = self.x - 75
 
     def slide_right(self):
-        if self.x < 347:
-            for x in range(75):
-                self.x = self.x + 1
-        # else:
-        #     self.collided = True
+        """
+        slides car right if not in rightmost lane
+        :return: 
+        """
+        if self.x < 349:
+            self.x = self.x + 75
 
-    def move(self):
-        if 272 <= self.x <= 278:
-            self.x = random.randint(273,277)
-        elif 347 <= self.x <= 353:
-            self.x = random.randint(348,352)
-        elif 197 <= self.x <= 203:
-            self.x = random.randint(198, 202)
+    def move(self): 
+        """
+        adds shaking effect to the car
+        """
+        if 274 <= self.x <= 276:
+            self.x = random.randint(274,276)
+        elif 349 <= self.x <= 351:
+            self.x = random.randint(349,351)
+        elif 199 <= self.x <= 201:
+            self.x = random.randint(199, 201)
 
     def draw(self, win):
-        """
-        Draw the floor. This is two images that move together.
-        :param win: the pygame surface/window
-        :return: None
-        """
         win.blit(self.IMG, (self.x, self.y))
 
     def get_mask(self):
+        """
+        mask/area of the car to recognize when collisions occur
+        :return: mask of car
+        """
         return pygame.mask.from_surface(self.IMG)
 
     def explode(self, win):
+        """
+        produces explosion effect upon collision
+        :param win: window
+        """
         win.blit(self.explode_img, (self.x - 25, self.y - 25))
         pygame.display.update()
 
@@ -90,7 +98,6 @@ class Track:
     def move(self):
         """
         move floor so it looks like its scrolling
-        :return: None
         """
         self.y1 += self.vel
         self.y2 += self.vel
@@ -102,15 +109,17 @@ class Track:
 
     def draw(self, win):
         """
-        Draw the floor. This is two images that move together.
+        Draw the track. This is two images that move together.
         :param win: the pygame surface/window
-        :return: None
         """
         win.blit(self.IMG, (self.x, self.y1))
         win.blit(self.IMG, (self.x, self.y2))
 
 
 class Block:
+    """
+    Oncoming cars for the player to avoid
+    """
     def __init__(self):
         self.x = 0
         self.y = -50
@@ -120,9 +129,13 @@ class Block:
         self.set_lane()
 
     def set_lane(self):
+        """
+        selects a random lane to spawn in
+        :return: 
+        """
         lane = random.randint(0,2)
         self.x = 200 + (lane*75)
-        #self.x = 275
+        
 
     def move(self):
         self.y += self.vel
@@ -131,6 +144,11 @@ class Block:
         win.blit(self.IMG, (self.x, self.y))
 
     def collide(self, car):
+        """
+        determines if block collided with car
+        :param car: car object
+        :return: true if collided false if did not
+        """
         car_mask = car.get_mask()
         block_mask = pygame.mask.from_surface(self.IMG)
         offset = (self.x - car.x, self.y - round(car.y))
@@ -272,11 +290,11 @@ def draw_sim_window(win, cars, blocks, score, track, gen):
     """
     draws the windows for the main game loop
     :param win: pygame window surface
-    :param bird: a Bird object
-    :param pipes: List of pipes
+    :param cars: List of cars
+    :param blocks: List of blocks
     :param score: score of the game (int)
+    :param track: track for cars to drive on
     :param gen: current generation
-    :param pipe_ind: index of closest pipe
     :return: None
     """
     track.draw(WIN)
@@ -307,7 +325,7 @@ def draw_sim_window(win, cars, blocks, score, track, gen):
 
     pygame.display.update()
 
-def eval_genomes(genomes, config): # doesnt work
+def eval_genomes(genomes, config):
     global WIN, gen, pause
     gen += 1
 
@@ -348,18 +366,18 @@ def eval_genomes(genomes, config): # doesnt work
         block_ind = 0
         if len(blocks) > 0:
             if len(blocks) > 1 and cars[0].y < blocks[0].y + 100:  # determine whether to use the first or second
-                block_ind = 1  # pipe on the screen for neural network input
+                block_ind = 1  # block on the screen for neural network input
 
-        for x, car in enumerate(cars):  # give each bird a fitness of 0.1 for each frame it stays alive
+        for x, car in enumerate(cars):  # give each car a fitness of 0.1 for each frame it stays alive
             ge[x].fitness += 0.1
             car.move()
 
-            # send bird location, top pipe location and bottom pipe location and determine from network whether to jump or not
+            # send car location, horizontal distance from car to block, y of block
             output = nets[cars.index(car)].activate(
                 (car.x, (car.x-blocks[block_ind].x), blocks[block_ind].y))
 
             if output[
-                0] > 0:  # we use a tanh activation function so result will be between -1 and 1. if over 0.5 jump
+                0] > 0:  # we use a cube activation function so result will be between negative infinity to positive infinity
                 car.slide_left()
 
             elif output[0] < 0:
