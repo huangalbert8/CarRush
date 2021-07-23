@@ -9,6 +9,7 @@ WIN_WIDTH = 600
 WIN_HEIGHT = 800
 FLOOR = 730
 STAT_FONT = pygame.font.SysFont("comicsans", 50)
+PAUSE_FONT = pygame.font.SysFont("comicsans", 30)
 END_FONT = pygame.font.SysFont("comicsans", 100)
 DRAW_LINES = False
 
@@ -19,6 +20,7 @@ TRACK_IMG = pygame.transform.scale(pygame.image.load(os.path.join("imgs","tracks
 CAR_IMG = pygame.transform.scale(pygame.image.load(os.path.join("imgs","car1.png")).convert_alpha(), (50,100))
 BLOCK_IMGS = [pygame.transform.scale(pygame.image.load(os.path.join("imgs","Block1.png")).convert_alpha(), (50,100)),pygame.transform.scale(pygame.image.load(os.path.join("imgs","block2.png")).convert_alpha(), (50,100)), pygame.transform.scale(pygame.image.load(os.path.join("imgs","block3.png")).convert_alpha(), (50,100))]
 EXPLOSION_IMG = pygame.transform.scale(pygame.image.load(os.path.join("imgs","explosion.png")).convert_alpha(), (100,150))
+TITLE_IMG = pygame.transform.scale(pygame.image.load(os.path.join("imgs","title.png")).convert_alpha(), (500,400))
 
 gen = 0
 pause = False
@@ -33,18 +35,28 @@ class Car:
         self.collided = False
 
     def slide_left(self):
-        if self.x > 200:
-            for x in range(75):
-                self.x = self.x - 1
-        else:
-            self.collided = True
+        k = 0
+        if self.x > 203:
+            while(k < 75):
+                self.x = self.x - 5
+                k = k+5
+        # else:
+        #     self.collided = True
 
     def slide_right(self):
-        if self.x < 350:
+        if self.x < 347:
             for x in range(75):
                 self.x = self.x + 1
-        else:
-            self.collided = True
+        # else:
+        #     self.collided = True
+
+    def move(self):
+        if 272 <= self.x <= 278:
+            self.x = random.randint(273,277)
+        elif 347 <= self.x <= 353:
+            self.x = random.randint(348,352)
+        elif 197 <= self.x <= 203:
+            self.x = random.randint(198, 202)
 
     def draw(self, win):
         """
@@ -110,6 +122,7 @@ class Block:
     def set_lane(self):
         lane = random.randint(0,2)
         self.x = 200 + (lane*75)
+        #self.x = 275
 
     def move(self):
         self.y += self.vel
@@ -164,7 +177,9 @@ def draw_window(win, track, car, blocks, exploded, score):
     if(exploded):
         car.explode(win)
     text = STAT_FONT.render("Score: "+str(score), True, (0, 0, 0))
+    p = PAUSE_FONT.render("Press P to Pause", True, (0,0,0))
     win.blit(text, (10, 10))
+    win.blit(p, (10, 50))
     for block in blocks:
         block.draw(win)
     pygame.display.update()
@@ -176,9 +191,10 @@ def unpause():
 
 
 def paused():
+    global pause
     clock = pygame.time.Clock()
     while pause:
-        playButton = Button((0, 255, 0), 50, 550, 200, 100, 'Play')
+        playButton = Button((0, 255, 0), 50, 550, 200, 100, 'Resume')
         quitButton = Button((255, 0, 0), 350, 550, 200, 100, 'Leave')
         playButton.draw(WIN)
         quitButton.draw(WIN)
@@ -192,11 +208,14 @@ def paused():
             TextRect.center = ((WIN_WIDTH / 2), (WIN_HEIGHT / 2))
             WIN.blit(TextSurf, TextRect)
             pos = pygame.mouse.get_pos()
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_p]:
+                unpause()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if playButton.isOver(pos):
                     unpause()
-              #  if quitButton.isOver(pos):
-               #     startScreen()
+                if quitButton.isOver(pos):
+                    startScreen()
 
         pygame.display.update()
         clock.tick(15)
@@ -246,6 +265,7 @@ def play():
         for r in rem:
             blocks.remove(r)
         track.move()
+        car.move()
         draw_window(WIN, track, car, blocks, not run, score)
 
 def draw_sim_window(win, cars, blocks, score, track, gen):
@@ -272,6 +292,11 @@ def draw_sim_window(win, cars, blocks, score, track, gen):
     score_label = STAT_FONT.render("Score: " + str(score), False ,(255,255,255))
     win.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 10))
 
+    # pause
+    score_label = PAUSE_FONT.render("Press P to Pause", False, (255, 255, 255))
+    win.blit(score_label, (WIN_WIDTH - score_label.get_width() - 15, 50))
+
+
     # generations
     score_label = STAT_FONT.render("Gens: " + str(gen-1), False,(255,255,255))
     win.blit(score_label, (10, 10))
@@ -283,7 +308,7 @@ def draw_sim_window(win, cars, blocks, score, track, gen):
     pygame.display.update()
 
 def eval_genomes(genomes, config): # doesnt work
-    global WIN, gen
+    global WIN, gen, pause
     gen += 1
 
     # start by creating lists holding the genome itself, the
@@ -315,6 +340,10 @@ def eval_genomes(genomes, config): # doesnt work
                 pygame.quit()
                 quit()
                 break
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_p]:
+                pause = True
+                paused()
 
         block_ind = 0
         if len(blocks) > 0:
@@ -323,16 +352,19 @@ def eval_genomes(genomes, config): # doesnt work
 
         for x, car in enumerate(cars):  # give each bird a fitness of 0.1 for each frame it stays alive
             ge[x].fitness += 0.1
+            car.move()
 
             # send bird location, top pipe location and bottom pipe location and determine from network whether to jump or not
             output = nets[cars.index(car)].activate(
-                (car.x, abs(car.x-blocks[block_ind].x)))
+                (car.x, (car.x-blocks[block_ind].x), blocks[block_ind].y))
 
             if output[
-                0] > 0.5:  # we use a tanh activation function so result will be between -1 and 1. if over 0.5 jump
-                car.slide_right()
-            elif output[0] < -0.5:
+                0] > 0:  # we use a tanh activation function so result will be between -1 and 1. if over 0.5 jump
                 car.slide_left()
+
+            elif output[0] < 0:
+                car.slide_right()
+
 
         track.move()
         rem = []
@@ -382,7 +414,7 @@ def run_sim(config_file):
     p.add_reporter(stats)
     # p.add_reporter(neat.Checkpointer(5))
     # Run for up to 50 generations.
-    winner = p.run(eval_genomes, 50)
+    winner = p.run(eval_genomes, 20)
     # show final stats
     print('\nBest genome:\n{!s}'.format(winner))
 
@@ -395,8 +427,10 @@ def startScreen():
         car.draw(WIN)
         greenbutton = Button((0, 255, 0), 50, 550, 200, 100, 'Simulate')
         bluebutton = Button((255, 0, 0), 350, 550, 200, 100, 'Play')
+
         text = END_FONT.render("CAR RUSH", False, (0,0,0))
-        WIN.blit(text, (125, 150))
+        WIN.blit(TITLE_IMG, (80,00))
+        WIN.blit(text, (125, 175))
         greenbutton.draw(WIN)
         bluebutton.draw(WIN)
 
